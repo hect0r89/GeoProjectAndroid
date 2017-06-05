@@ -9,6 +9,7 @@ class PointGeo {
     private double lon;
     private int radius;
     private String message;
+    private int id;
 
     public PointGeo(double lat, double lon, int radius, String message) {
         this.lat = lat;
@@ -21,7 +22,7 @@ class PointGeo {
         return lat;
     }
 
-    public void setLat(float lat) {
+    public void setLat(double lat) {
         this.lat = lat;
     }
 
@@ -29,7 +30,7 @@ class PointGeo {
         return lon;
     }
 
-    public void setLon(float lon) {
+    public void setLon(double lon) {
         this.lon = lon;
     }
 
@@ -49,5 +50,11 @@ class PointGeo {
         this.message = message;
     }
 
+    public int getId() {
+        return id;
+    }
 
+    public void setId(int id) {
+        this.id = id;
+    }
 }
