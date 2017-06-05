@@ -25,6 +25,9 @@ interface ServiceRetrofit {
     @POST("points/")
     Call<PointGeo> postPoint(@Body PointGeo point);
 
+    @GET("points/{id}/")
+    Call<PointGeo> getPoint(@Path("id") int pointId);
+
     @PUT("points/{id}/")
     Call<PointGeo> putPoint(@Path("id") long contactId, @Body PointGeo c);
 

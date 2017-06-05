@@ -3,6 +3,7 @@ package com.master.finalprojectgeo;
 import android.app.IntentService;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.app.ProgressDialog;
 import android.app.TaskStackBuilder;
 import android.content.Context;
 import android.content.Intent;
@@ -18,6 +19,10 @@ import com.google.android.gms.location.GeofencingEvent;
 import java.util.ArrayList;
 import java.util.List;
 
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
+
 import static android.content.ContentValues.TAG;
 
 /**
@@ -27,6 +32,9 @@ import static android.content.ContentValues.TAG;
 public class GeofenceTransitionsIntentService extends IntentService {
 
     protected static final String TAG = "GeofenceTransitionsIS";
+    private ArrayList<PointGeo> points;
+    private int contPoints = 0;
+    private boolean sendnotification = false;
 
     /**
      * This constructor is required, and calls the super IntentService(String)
@@ -40,6 +48,7 @@ public class GeofenceTransitionsIntentService extends IntentService {
     @Override
     public void onCreate() {
         super.onCreate();
+        points = new ArrayList<>();
     }
 
     /**
@@ -59,29 +68,57 @@ public class GeofenceTransitionsIntentService extends IntentService {
         }
 
         // Get the transition type.
-        int geofenceTransition = geofencingEvent.getGeofenceTransition();
+        final int geofenceTransition = geofencingEvent.getGeofenceTransition();
 
         // Test that the reported transition was of interest.
-        if (geofenceTransition == Geofence.GEOFENCE_TRANSITION_DWELL || geofenceTransition == Geofence.GEOFENCE_TRANSITION_ENTER || geofenceTransition == Geofence.GEOFENCE_TRANSITION_EXIT) {
+        if (geofenceTransition == Geofence.GEOFENCE_TRANSITION_DWELL) {
 
             // Get the geofences that were triggered. A single event can trigger multiple geofences.
-            List<Geofence> triggeringGeofences = geofencingEvent.getTriggeringGeofences();
+            final List<Geofence> triggeringGeofences = geofencingEvent.getTriggeringGeofences();
+            for (Geofence geofence : triggeringGeofences) {
+                final ServiceRetrofit pointService = ServiceRetrofit.retrofit.create(ServiceRetrofit.class);
+                Call<PointGeo> call = pointService.getPoint(Integer.parseInt(geofence.getRequestId()));
+                call.enqueue(new Callback<PointGeo>() {
 
+                    @Override
+                    public void onResponse(Call<PointGeo> call, Response<PointGeo> response) {
+                        // dialogLoading.dismiss();
+                        points.add(new PointGeo(response.body().getLat(), response.body().getLon(), response.body().getRadius(), response.body().getMessage()));
+                        contPoints++;
+                        if (contPoints == triggeringGeofences.size()) {
+                            sendnotification = true;
+                        }
+                        checkComplete(geofenceTransition, triggeringGeofences);
+                    }
+
+                    @Override
+                    public void onFailure(Call<PointGeo> call, Throwable t) {
+                        //  dialogLoading.dismiss();
+                    }
+                });
+            }
+
+
+        } else {
+            // Log the error.
+            Log.e(TAG, getString(R.string.geofence_transition_invalid_type, geofenceTransition));
+        }
+    }
+
+    private void checkComplete(int geofenceTransition, List<Geofence> triggeringGeofences) {
+        if (sendnotification) {
             // Get the transition details as a String.
             String geofenceTransitionDetails = getGeofenceTransitionDetails(
                     this,
                     geofenceTransition,
                     triggeringGeofences
             );
-
-            // Send notification and log the transition details.
+// Send notification and log the transition details.
             sendNotification(geofenceTransitionDetails);
             Log.i(TAG, geofenceTransitionDetails);
-        } else {
-            // Log the error.
-            Log.e(TAG, getString(R.string.geofence_transition_invalid_type, geofenceTransition));
         }
     }
+
 
     /**
      * Gets transition details and returns them as a formatted string.
@@ -100,6 +137,7 @@ public class GeofenceTransitionsIntentService extends IntentService {
 
         // Get the Ids of each geofence that was triggered.
         ArrayList triggeringGeofencesIdsList = new ArrayList();
+        //final ProgressDialog dialogLoading = ProgressDialog.show(getApplicationContext(), "", "Cargando...");
         for (Geofence geofence : triggeringGeofences) {
             triggeringGeofencesIdsList.add(geofence.getRequestId());
         }
@@ -131,7 +169,10 @@ public class GeofenceTransitionsIntentService extends IntentService {
 
         // Get a notification builder that's compatible with platform versions >= 4
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this);
-
+        String message = "";
+        for (PointGeo point : points) {
+            message += point.getMessage() + "\n";
+        }
         // Define the notification settings.
         builder.setSmallIcon(R.mipmap.ic_launcher)
                 // In a real app, you may want to use a library like Volley
@@ -140,7 +181,8 @@ public class GeofenceTransitionsIntentService extends IntentService {
                         R.mipmap.ic_launcher))
                 .setColor(Color.RED)
                 .setContentTitle(notificationDetails)
-                .setContentText(getString(R.string.geofence_transition_notification_text))
+                .setContentText(message)
+                .setStyle(new NotificationCompat.BigTextStyle().bigText(message))
                 .setContentIntent(notificationPendingIntent);
 
         // Dismiss notification once the user touches it.
@@ -162,10 +204,8 @@ public class GeofenceTransitionsIntentService extends IntentService {
      */
     private String getTransitionString(int transitionType) {
         switch (transitionType) {
-            case Geofence.GEOFENCE_TRANSITION_ENTER:
-                return getString(R.string.geofence_transition_entered);
-            case Geofence.GEOFENCE_TRANSITION_EXIT:
-                return getString(R.string.geofence_transition_exited);
+            case Geofence.GEOFENCE_TRANSITION_DWELL:
+                return getString(R.string.geofence_transition_dwell);
             default:
                 return getString(R.string.unknown_geofence_transition);
         }

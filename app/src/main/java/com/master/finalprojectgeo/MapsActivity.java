@@ -114,7 +114,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
                         @Override
                         public void onClick(DialogInterface dialog, int which) {
-                            //TODO Enviaremos los datos al servidor
                             dialogLoading = ProgressDialog.show(MapsActivity.this, "", "Cargando...");
                             EditText message = (EditText) v.findViewById(R.id.editTextMensaje);
                             PointGeo point = new PointGeo(latLng.latitude, latLng.longitude, 5, message.getText().toString());
@@ -132,7 +131,8 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                                     dialogLoading.dismiss();
                                 }
                             });
-                            mMap.addMarker(new MarkerOptions().position(latLng).title(message.getText().toString()));
+                            //mMap.addMarker(new MarkerOptions().position(latLng).title(message.getText().toString()));
+                            checkForUpdates();
                         }
                     })
                     .setNegativeButton("Cancelar", new DialogInterface.OnClickListener() {
@@ -246,10 +246,8 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
                                 // Set the transition types of interest. Alerts are only generated for these
                                 // transition. We track entry and exit transitions in this sample.
-                                .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER |
-                                        Geofence.GEOFENCE_TRANSITION_EXIT |
-                                        Geofence.GEOFENCE_TRANSITION_DWELL)
-                                .setLoiteringDelay(1000)
+                                .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER | Geofence.GEOFENCE_TRANSITION_DWELL)
+                                .setLoiteringDelay(5000)
                                 // Create the geofence.
                                 .build();
                         mGeofenceList.add(geofence);
