@@ -83,12 +83,15 @@ public class GeofenceTransitionsIntentService extends IntentService {
                     @Override
                     public void onResponse(Call<PointGeo> call, Response<PointGeo> response) {
                         // dialogLoading.dismiss();
-                        points.add(new PointGeo(response.body().getLat(), response.body().getLon(), response.body().getRadius(), response.body().getMessage()));
-                        contPoints++;
-                        if (contPoints == triggeringGeofences.size()) {
-                            sendnotification = true;
+                        if(response.body()!=null) {
+
+
+                            points.add(new PointGeo(response.body().getLat(), response.body().getLon(), response.body().getRadius(), response.body().getMessage(), response.body().getDevice_id()));
+
+
+// Send notification and log the transition details.
+                            sendNotification(response.body());
                         }
-                        checkComplete(geofenceTransition, triggeringGeofences);
                     }
 
                     @Override
@@ -96,6 +99,11 @@ public class GeofenceTransitionsIntentService extends IntentService {
                         //  dialogLoading.dismiss();
                     }
                 });
+                String geofenceTransitionDetails = getGeofenceTransitionDetails(
+                        this,
+                        geofenceTransition,
+                        triggeringGeofences
+                );
             }
 
 
@@ -105,19 +113,9 @@ public class GeofenceTransitionsIntentService extends IntentService {
         }
     }
 
-    private void checkComplete(int geofenceTransition, List<Geofence> triggeringGeofences) {
-        if (sendnotification) {
-            // Get the transition details as a String.
-            String geofenceTransitionDetails = getGeofenceTransitionDetails(
-                    this,
-                    geofenceTransition,
-                    triggeringGeofences
-            );
-// Send notification and log the transition details.
-            sendNotification(geofenceTransitionDetails);
-            Log.i(TAG, geofenceTransitionDetails);
-        }
-    }
+
+
+
 
 
     /**
@@ -150,7 +148,7 @@ public class GeofenceTransitionsIntentService extends IntentService {
      * Posts a notification in the notification bar when a transition is detected.
      * If the user clicks the notification, control goes to the MainActivity.
      */
-    private void sendNotification(String notificationDetails) {
+    private void sendNotification(PointGeo point) {
         // Create an explicit content Intent that starts the main Activity.
         Intent notificationIntent = new Intent(getApplicationContext(), MapsActivity.class);
 
@@ -169,20 +167,16 @@ public class GeofenceTransitionsIntentService extends IntentService {
 
         // Get a notification builder that's compatible with platform versions >= 4
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this);
-        String message = "";
-        for (PointGeo point : points) {
-            message += point.getMessage() + "\n";
-        }
+
         // Define the notification settings.
         builder.setSmallIcon(R.mipmap.ic_launcher)
                 // In a real app, you may want to use a library like Volley
                 // to decode the Bitmap.
                 .setLargeIcon(BitmapFactory.decodeResource(getResources(),
                         R.mipmap.ic_launcher))
-                .setColor(Color.RED)
-                .setContentTitle(notificationDetails)
-                .setContentText(message)
-                .setStyle(new NotificationCompat.BigTextStyle().bigText(message))
+                .setContentTitle("Dato de interés")
+                .setContentText(point.getMessage())
+                .setStyle(new NotificationCompat.BigTextStyle().bigText(point.getMessage()))
                 .setContentIntent(notificationPendingIntent);
 
         // Dismiss notification once the user touches it.
@@ -193,7 +187,7 @@ public class GeofenceTransitionsIntentService extends IntentService {
                 (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
 
         // Issue the notification
-        mNotificationManager.notify(0, builder.build());
+        mNotificationManager.notify(point.getId(), builder.build());
     }
 
     /**

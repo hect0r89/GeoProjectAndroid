@@ -1,6 +1,6 @@
 <resources>
     <string name="app_name">FinalProjectGeo</string>
-    <string name="title_activity_maps">Map</string>
+    <string name="title_activity_maps">Geodata</string>
     <string name="mensaje">Mensaje</string>
 
     <!-- Error strings -->
@@ -22,4 +22,5 @@
     <string name="unknown_geofence_transition">Unknown Transition</string>
 
     <string name="geofence_transition_notification_text">Click notification to return to app</string>
+    <string name="create_title_dialog">Crear Geodato</string>
 </resources>

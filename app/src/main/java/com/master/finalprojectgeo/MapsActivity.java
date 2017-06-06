@@ -4,16 +4,24 @@ import android.app.PendingIntent;
 import android.app.ProgressDialog;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.res.TypedArray;
 import android.graphics.Color;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.v4.app.FragmentActivity;
 import android.support.v7.app.AlertDialog;
+import android.support.v7.app.AppCompatActivity;
+import android.support.v7.widget.Toolbar;
+import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.LayoutInflater;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.view.View;
 import android.widget.EditText;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import com.google.android.gms.common.ConnectionResult;
@@ -29,6 +37,7 @@ import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.Circle;
 import com.google.android.gms.maps.model.CircleOptions;
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.karumi.dexter.Dexter;
 import com.karumi.dexter.PermissionToken;
@@ -46,11 +55,16 @@ import retrofit2.Response;
 import static android.Manifest.permission.ACCESS_FINE_LOCATION;
 import static com.google.android.gms.location.Geofence.NEVER_EXPIRE;
 
-public class MapsActivity extends FragmentActivity implements OnMapReadyCallback, GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener, ResultCallback<Status> {
+
+public class MapsActivity extends AppCompatActivity implements OnMapReadyCallback, GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener, ResultCallback<Status> {
+
     Boolean fromOnMapReady = false;
     protected static final String TAG = "MapsActivity";
     private GoogleMap mMap;
     private ProgressDialog dialogLoading;
+    private String deviceId;
+    private static final int RADIUS_GEOFENCE = 150;
+    private static final int TIME_WAIT_GEOFENCE = 10000;
 
     /**
      * Provides the entry point to Google Play services.
@@ -86,6 +100,12 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         mGeofenceList = new ArrayList<>();
         // Initially set the PendingIntent used in addGeofences() and removeGeofences() to null.
         mGeofencePendingIntent = null;
+        deviceId = Settings.Secure.getString(getApplicationContext().getContentResolver(),
+                Settings.Secure.ANDROID_ID);
+
+        Toolbar myToolbar = (Toolbar) findViewById(R.id.my_toolbar);
+        setSupportActionBar(myToolbar);
+
 
     }
 
@@ -103,6 +123,28 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         super.onStop();
     }
 
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        // Inflate the menu; this adds items to the action bar if it is present.
+        getMenuInflater().inflate(R.menu.menu_app_bar, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        switch (item.getItemId()) {
+            case R.id.action_refresh:
+               checkForUpdates();
+                return true;
+
+            default:
+                // If we got here, the user's action was not recognized.
+                // Invoke the superclass to handle it.
+                return super.onOptionsItemSelected(item);
+
+        }
+    }
+
     GoogleMap.OnMapLongClickListener mapLongClickListener = new GoogleMap.OnMapLongClickListener() {
         @Override
         public void onMapLongClick(final LatLng latLng) {
@@ -116,7 +158,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                         public void onClick(DialogInterface dialog, int which) {
                             dialogLoading = ProgressDialog.show(MapsActivity.this, "", "Cargando...");
                             EditText message = (EditText) v.findViewById(R.id.editTextMensaje);
-                            PointGeo point = new PointGeo(latLng.latitude, latLng.longitude, 5, message.getText().toString());
+                            PointGeo point = new PointGeo(latLng.latitude, latLng.longitude, RADIUS_GEOFENCE, message.getText().toString(), deviceId);
                             ServiceRetrofit contactService = ServiceRetrofit.retrofit.create(ServiceRetrofit.class);
                             Call<PointGeo> call = contactService.postPoint(point);
                             call.enqueue(new Callback<PointGeo>() {
@@ -124,6 +166,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                                 @Override
                                 public void onResponse(Call<PointGeo> call, Response<PointGeo> response) {
                                     dialogLoading.dismiss();
+                                    checkForUpdates();
                                 }
 
                                 @Override
@@ -132,7 +175,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                                 }
                             });
                             //mMap.addMarker(new MarkerOptions().position(latLng).title(message.getText().toString()));
-                            checkForUpdates();
+
                         }
                     })
                     .setNegativeButton("Cancelar", new DialogInterface.OnClickListener() {
@@ -141,6 +184,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
                         }
                     });
+
             builder.show();
 
 
@@ -177,7 +221,87 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                     }
                 }).check();
         // Kick off the request to build GoogleApiClient.
+        final TypedArray styledAttributes = getApplicationContext().getTheme().obtainStyledAttributes(
+                new int[] { android.R.attr.actionBarSize });
+        int mActionBarSize = (int) styledAttributes.getDimension(0, 0);
+        styledAttributes.recycle();
+        mMap.setPadding(0, mActionBarSize, 0, 0);
         mMap.setOnMapLongClickListener(mapLongClickListener);
+        mMap.setOnMarkerClickListener(new GoogleMap.OnMarkerClickListener() {
+            @Override
+            public boolean onMarkerClick(Marker marker) {
+                marker.hideInfoWindow();
+                String snippet = marker.getSnippet();
+                dialogLoading = ProgressDialog.show(MapsActivity.this, "", "Cargando...");
+                final ServiceRetrofit pointService = ServiceRetrofit.retrofit.create(ServiceRetrofit.class);
+                Call<PointGeo> call = pointService.getPoint(Integer.parseInt(snippet));
+                call.enqueue(new Callback<PointGeo>() {
+
+                    @Override
+                    public void onResponse(Call<PointGeo> call, Response<PointGeo> response) {
+                        dialogLoading.dismiss();
+                        showDetail(response.body());
+
+                    }
+
+                    @Override
+                    public void onFailure(Call<PointGeo> call, Throwable t) {
+                        dialogLoading.dismiss();
+                    }
+                });
+
+                return true;
+            }
+
+        });
+    }
+
+    private void showDetail(final PointGeo point) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(MapsActivity.this);
+        LayoutInflater inflater = MapsActivity.this.getLayoutInflater();
+        final View v = inflater.inflate(R.layout.dialog_geo_detail, null);
+        TextView message = (TextView) v.findViewById(R.id.txtTitleDetail);
+        message.setText(point.getMessage());
+        TextView lat = (TextView) v.findViewById(R.id.txtLatDetail);
+        lat.setText(String.valueOf(point.getLat()));
+        TextView lon = (TextView) v.findViewById(R.id.txtLonDetail);
+        lon.setText(String.valueOf(point.getLon()));
+        builder.setView(v)
+                .setPositiveButton("Ok", new DialogInterface.OnClickListener() {
+
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+
+
+                    }
+                }).setNegativeButton("Eliminar", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                final ServiceRetrofit pointService = ServiceRetrofit.retrofit.create(ServiceRetrofit.class);
+                Call<Response<Void>> call = pointService.deletePoint(point.getId());
+                call.enqueue(new Callback<Response<Void>>() {
+
+                    @Override
+                    public void onResponse(Call<Response<Void>> call, Response<Response<Void>> response) {
+                        dialogLoading.dismiss();
+                        checkForUpdates();
+
+                    }
+
+                    @Override
+                    public void onFailure(Call<Response<Void>> call, Throwable t) {
+                        dialogLoading.dismiss();
+                    }
+                });
+            }
+        });
+        final AlertDialog dialog = builder.create();
+        dialog.show();
+        if(!point.getDevice_id().equals(deviceId)){
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE)
+                    .setEnabled(false);
+        }
+
 
     }
 
@@ -219,6 +343,13 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
     private void checkForUpdates() {
         dialogLoading = ProgressDialog.show(MapsActivity.this, "", "Cargando...");
+        mMap.clear();
+        LocationServices.GeofencingApi.removeGeofences(
+                mGoogleApiClient,
+                // This is the same pending intent that was used in addGeofences().
+                getGeofencePendingIntent()
+        ).setResultCallback(this); // Result processed in onResult().
+
         ServiceRetrofit contactService = ServiceRetrofit.retrofit.create(ServiceRetrofit.class);
         Call<ArrayList<PointGeo>> call = contactService.getPoints();
         call.enqueue(new Callback<ArrayList<PointGeo>>() {
@@ -227,7 +358,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             public void onResponse(Call<ArrayList<PointGeo>> call, Response<ArrayList<PointGeo>> response) {
                 if (response.body() != null) {
                     for (PointGeo point : response.body()) {
-                        mMap.addMarker(new MarkerOptions().position(new LatLng(point.getLat(), point.getLon())).title(point.getMessage()));
+                        mMap.addMarker(new MarkerOptions().position(new LatLng(point.getLat(), point.getLon())).title(point.getMessage()).snippet(String.valueOf(point.getId())));
                         Geofence geofence = new Geofence.Builder()
                                 // Set the request ID of the geofence. This is a string to identify this
                                 // geofence.
@@ -247,18 +378,18 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                                 // Set the transition types of interest. Alerts are only generated for these
                                 // transition. We track entry and exit transitions in this sample.
                                 .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER | Geofence.GEOFENCE_TRANSITION_DWELL)
-                                .setLoiteringDelay(5000)
+                                .setLoiteringDelay(TIME_WAIT_GEOFENCE)
                                 // Create the geofence.
                                 .build();
                         mGeofenceList.add(geofence);
-                        CircleOptions circleOptions = new CircleOptions()
-                                .strokeColor(Color.BLACK) //Outer black border
-                                .fillColor(Color.TRANSPARENT) //inside of the geofence will be transparent, change to whatever color you prefer like 0x88ff0000 for mid-transparent red
-                                .center(new LatLng(point.getLat(), point.getLon())) // the LatLng Object of your geofence location
-                                .radius(point.getRadius()); // The radius (in meters) of your geofence
-
-// Get back the mutable Circle
-                        Circle circle = mMap.addCircle(circleOptions);
+//                        CircleOptions circleOptions = new CircleOptions()
+//                                .strokeColor(Color.BLACK) //Outer black border
+//                                .fillColor(Color.TRANSPARENT) //inside of the geofence will be transparent, change to whatever color you prefer like 0x88ff0000 for mid-transparent red
+//                                .center(new LatLng(point.getLat(), point.getLon())) // the LatLng Object of your geofence location
+//                                .radius(point.getRadius()); // The radius (in meters) of your geofence
+//
+//// Get back the mutable Circle
+//                        Circle circle = mMap.addCircle(circleOptions);
                     }
 
 
@@ -293,6 +424,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
 
     }
+
 
     /**
      * Runs when a GoogleApiClient object successfully connects.

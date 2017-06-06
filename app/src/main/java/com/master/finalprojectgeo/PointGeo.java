@@ -10,12 +10,15 @@ class PointGeo {
     private int radius;
     private String message;
     private int id;
+    private Float rating;
+    private String device_id;
 
-    public PointGeo(double lat, double lon, int radius, String message) {
+    public PointGeo(double lat, double lon, int radius, String message,  String device_id) {
         this.lat = lat;
         this.lon = lon;
         this.radius = radius;
         this.message = message;
+        this.device_id = device_id;
     }
 
     public double getLat() {
@@ -56,5 +59,21 @@ class PointGeo {
 
     public void setId(int id) {
         this.id = id;
+    }
+
+    public Float getRating() {
+        return rating;
+    }
+
+    public void setRating(Float rating) {
+        this.rating = rating;
+    }
+
+    public String getDevice_id() {
+        return device_id;
+    }
+
+    public void setDevice_id(String device_id) {
+        this.device_id = device_id;
     }
 }
