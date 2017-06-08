@@ -5,16 +5,14 @@ import android.app.ProgressDialog;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.res.TypedArray;
-import android.graphics.Color;
+import android.location.Location;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
-import android.support.v4.app.FragmentActivity;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
-import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.Menu;
@@ -22,7 +20,6 @@ import android.view.MenuItem;
 import android.view.View;
 import android.widget.EditText;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
@@ -30,12 +27,12 @@ import com.google.android.gms.common.api.ResultCallback;
 import com.google.android.gms.common.api.Status;
 import com.google.android.gms.location.Geofence;
 import com.google.android.gms.location.GeofencingRequest;
+import com.google.android.gms.location.LocationListener;
+import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
-import com.google.android.gms.maps.model.Circle;
-import com.google.android.gms.maps.model.CircleOptions;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
@@ -47,6 +44,7 @@ import com.karumi.dexter.listener.PermissionRequest;
 import com.karumi.dexter.listener.single.PermissionListener;
 
 import java.util.ArrayList;
+import java.util.TreeMap;
 
 import retrofit2.Call;
 import retrofit2.Callback;
@@ -54,59 +52,86 @@ import retrofit2.Response;
 
 import static android.Manifest.permission.ACCESS_FINE_LOCATION;
 import static com.google.android.gms.location.Geofence.NEVER_EXPIRE;
+import static com.master.finalprojectgeo.R.id.map;
 
 
-public class MapsActivity extends AppCompatActivity implements OnMapReadyCallback, GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener, ResultCallback<Status> {
-
-    Boolean fromOnMapReady = false;
-    protected static final String TAG = "MapsActivity";
-    private GoogleMap mMap;
-    private ProgressDialog dialogLoading;
-    private String deviceId;
-    private static final int RADIUS_GEOFENCE = 150;
-    private static final int TIME_WAIT_GEOFENCE = 10000;
+public class MapsActivity extends AppCompatActivity implements OnMapReadyCallback, GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener, ResultCallback<Status>, LocationListener {
 
     /**
-     * Provides the entry point to Google Play services.
+     * Variable usada para asegurar que no se desconecta el cliente Google si el mapa no ha sido iniciado
+     */
+    Boolean fromOnMapReady = false;
+    /**
+     * Etiqueta para identificar las trazas de esta activity
+     */
+    protected static final String TAG = "MapsActivity";
+    /**
+     * Atributo Mapa de GoogleMaps que se mostrará en el dispositivo
+     */
+    private GoogleMap mMap;
+    /**
+     * Dialog que se mostrará en los procesos de carga
+     */
+    private ProgressDialog dialogLoading;
+    /**
+     * Id del usuario y dispositivo que se mandará al servidor
+     */
+    private String deviceId;
+    /**
+     * Radio por defecto que se aplica a los Geofence
+     */
+    private static final int RADIUS_GEOFENCE = 150;
+    /**
+     * Tiempo de espera por defecto aplicado a los triggered de los Geofences
+     */
+    private static final int TIME_WAIT_GEOFENCE = 10000;
+    /**
+     * Constante usada para medir las distancias entre dos puntos
+     */
+    public static final double R_H = 6372.8; // In kilometers
+    /**
+     * LocationRequest se utilizan para solicitar un servicio para las actualizaciones de ubicación
+     */
+    private LocationRequest mLocationRequest;
+    /**
+     * Variable que almacena la última ubicación
+     */
+    private Location mLastLocation;
+    /**
+     * TreeMap donde se almacenan ordenados distancias entre geofence y usuario
+     */
+    private TreeMap<Double, Geofence> distanceGeofences;
+    /**
+     * Punto de entrada para el cliente de Google
      */
     protected GoogleApiClient mGoogleApiClient;
-
     /**
-     * The list of geofences used in this sample.
+     * Lista de geofences
      */
     protected ArrayList<Geofence> mGeofenceList;
-
     /**
-     * Used to keep track of whether geofences were added.
-     */
-    private boolean mGeofencesAdded;
-
-    /**
-     * Used when requesting to add or remove geofences.
+     * Intent para añadir o eliminar Geofences
      */
     private PendingIntent mGeofencePendingIntent;
-    SupportMapFragment mapFragment;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_maps);
+        //Se inicializa el cliente de Google
         buildGoogleApiClient();
-        // Obtain the SupportMapFragment and get notified when the map is ready to be used.
-        mapFragment = (SupportMapFragment) getSupportFragmentManager()
-                .findFragmentById(R.id.map);
+        SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
+                .findFragmentById(map);
         mapFragment.getMapAsync(this);
-        // Empty list for storing geofences.
-        mGeofenceList = new ArrayList<>();
-        // Initially set the PendingIntent used in addGeofences() and removeGeofences() to null.
         mGeofencePendingIntent = null;
+        //Se obtiene el id único del usuario de este dispositivo
         deviceId = Settings.Secure.getString(getApplicationContext().getContentResolver(),
                 Settings.Secure.ANDROID_ID);
-
+        //Se asigna la toolbar
         Toolbar myToolbar = (Toolbar) findViewById(R.id.my_toolbar);
         setSupportActionBar(myToolbar);
-
-
+        //Se inicializa el TreeMap vacío
+        distanceGeofences = new TreeMap<>();
     }
 
     @Override
@@ -125,7 +150,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
-        // Inflate the menu; this adds items to the action bar if it is present.
+        // Se infla el menú que aparecerá en la toolbar
         getMenuInflater().inflate(R.menu.menu_app_bar, menu);
         return true;
     }
@@ -134,37 +159,44 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     public boolean onOptionsItemSelected(MenuItem item) {
         switch (item.getItemId()) {
             case R.id.action_refresh:
-               checkForUpdates();
+                //Si el botón pulsado en el menú es el de actualizar se llama al método actualizar
+                checkForUpdates();
                 return true;
 
             default:
-                // If we got here, the user's action was not recognized.
-                // Invoke the superclass to handle it.
                 return super.onOptionsItemSelected(item);
-
         }
     }
 
+    /**
+     * Listener que se usa para detectar una pulsaxión larga en el mapa y que añade el marcador y realiza la petición
+     */
     GoogleMap.OnMapLongClickListener mapLongClickListener = new GoogleMap.OnMapLongClickListener() {
         @Override
         public void onMapLongClick(final LatLng latLng) {
+            //Se crea un custom dialog con un input text que permite introducir el mensaje
             AlertDialog.Builder builder = new AlertDialog.Builder(MapsActivity.this);
             LayoutInflater inflater = MapsActivity.this.getLayoutInflater();
             final View v = inflater.inflate(R.layout.dialog_geo_create, null);
             builder.setView(v)
+                    //En caso de confirmar la creación
                     .setPositiveButton("Crear", new DialogInterface.OnClickListener() {
 
                         @Override
                         public void onClick(DialogInterface dialog, int which) {
+                            //Se muestra una barra de carga
                             dialogLoading = ProgressDialog.show(MapsActivity.this, "", "Cargando...");
                             EditText message = (EditText) v.findViewById(R.id.editTextMensaje);
+                            //Se crea el objeto punto que será enviado al servidor
                             PointGeo point = new PointGeo(latLng.latitude, latLng.longitude, RADIUS_GEOFENCE, message.getText().toString(), deviceId);
+                            //Se hace uso del servicio Retrofit para conectarnos
                             ServiceRetrofit contactService = ServiceRetrofit.retrofit.create(ServiceRetrofit.class);
+                            //Se realiza una petición POST pasando el objeto
                             Call<PointGeo> call = contactService.postPoint(point);
                             call.enqueue(new Callback<PointGeo>() {
-
                                 @Override
                                 public void onResponse(Call<PointGeo> call, Response<PointGeo> response) {
+                                    //En caso de respuesta afirmativa del servidor se actualizan los datos
                                     dialogLoading.dismiss();
                                     checkForUpdates();
                                 }
@@ -174,10 +206,9 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                                     dialogLoading.dismiss();
                                 }
                             });
-                            //mMap.addMarker(new MarkerOptions().position(latLng).title(message.getText().toString()));
-
                         }
                     })
+                    //En caso de cancelar la creación se cierra el dialog
                     .setNegativeButton("Cancelar", new DialogInterface.OnClickListener() {
                         @Override
                         public void onClick(DialogInterface dialog, int which) {
@@ -192,18 +223,13 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     };
 
     /**
-     * Manipulates the map once available.
-     * This callback is triggered when the map is ready to be used.
-     * This is where we can add markers or lines, add listeners or move the camera. In this case,
-     * we just add a marker near Sydney, Australia.
-     * If Google Play services is not installed on the device, the user will be prompted to install
-     * it inside the SupportMapFragment. This method will only be triggered once the user has
-     * installed Google Play services and returned to the app.
+     * Este callback es llamado cuando el mapa está listo para usarse
      */
     @Override
     public void onMapReady(GoogleMap googleMap) {
         mMap = googleMap;
         fromOnMapReady = true;
+        //Solicitamos permisos de ubicación los únicos necesarios
         Dexter.withActivity(this)
                 .withPermission(ACCESS_FINE_LOCATION)
                 .withListener(new PermissionListener() {
@@ -220,28 +246,32 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                         token.continuePermissionRequest();
                     }
                 }).check();
-        // Kick off the request to build GoogleApiClient.
+
+        //Se obtiene el tamaño de la toolbar en tiempo de ejecución
         final TypedArray styledAttributes = getApplicationContext().getTheme().obtainStyledAttributes(
-                new int[] { android.R.attr.actionBarSize });
+                new int[]{android.R.attr.actionBarSize});
         int mActionBarSize = (int) styledAttributes.getDimension(0, 0);
         styledAttributes.recycle();
+        //Se añade un padding top al mapa para que no oculte la toolbar los botones del mapa
         mMap.setPadding(0, mActionBarSize, 0, 0);
+        //Se asigna el listener explicado antes para largas pulsaciones
         mMap.setOnMapLongClickListener(mapLongClickListener);
+        //Se asigna un listener en caso de que se pulse un marcador, para mostrar un dialogo de detalle
         mMap.setOnMarkerClickListener(new GoogleMap.OnMarkerClickListener() {
             @Override
             public boolean onMarkerClick(Marker marker) {
                 marker.hideInfoWindow();
                 String snippet = marker.getSnippet();
                 dialogLoading = ProgressDialog.show(MapsActivity.this, "", "Cargando...");
+                //Se realiza una petición para obtener el detalle del punto clickado
                 final ServiceRetrofit pointService = ServiceRetrofit.retrofit.create(ServiceRetrofit.class);
                 Call<PointGeo> call = pointService.getPoint(Integer.parseInt(snippet));
                 call.enqueue(new Callback<PointGeo>() {
-
                     @Override
                     public void onResponse(Call<PointGeo> call, Response<PointGeo> response) {
                         dialogLoading.dismiss();
+                        //En caso de respuesta afirmativa se muestra el detalle
                         showDetail(response.body());
-
                     }
 
                     @Override
@@ -249,14 +279,18 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                         dialogLoading.dismiss();
                     }
                 });
-
                 return true;
             }
-
         });
     }
 
+    /**
+     * Método que muestra un dialogo de detalle con la información de un punto y que permite eliminarlo si es posible
+     *
+     * @param point objeto PointGeo a mostrar
+     */
     private void showDetail(final PointGeo point) {
+        //Se crea otro custom dialog y sus elementos para rellenarlos con los datos del punto
         AlertDialog.Builder builder = new AlertDialog.Builder(MapsActivity.this);
         LayoutInflater inflater = MapsActivity.this.getLayoutInflater();
         final View v = inflater.inflate(R.layout.dialog_geo_detail, null);
@@ -267,27 +301,25 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         TextView lon = (TextView) v.findViewById(R.id.txtLonDetail);
         lon.setText(String.valueOf(point.getLon()));
         builder.setView(v)
+                //En caso de respuesta afirmativa  se cierra el cuadro
                 .setPositiveButton("Ok", new DialogInterface.OnClickListener() {
-
-                    @Override
-                    public void onClick(DialogInterface dialog, int which) {
-
-
-                    }
-                }).setNegativeButton("Eliminar", new DialogInterface.OnClickListener() {
             @Override
             public void onClick(DialogInterface dialog, int which) {
+            }
+            //En caso de respuesta negativa se realiza una petición para eliminar el punto
+        }).setNegativeButton("Eliminar", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                //Se realiza una petición delete sobre la id enviada
                 final ServiceRetrofit pointService = ServiceRetrofit.retrofit.create(ServiceRetrofit.class);
                 Call<Response<Void>> call = pointService.deletePoint(point.getId());
                 call.enqueue(new Callback<Response<Void>>() {
-
                     @Override
                     public void onResponse(Call<Response<Void>> call, Response<Response<Void>> response) {
                         dialogLoading.dismiss();
+                        //En caso de respuesta afirmativa se actualizan los datos
                         checkForUpdates();
-
                     }
-
                     @Override
                     public void onFailure(Call<Response<Void>> call, Throwable t) {
                         dialogLoading.dismiss();
@@ -297,14 +329,16 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         });
         final AlertDialog dialog = builder.create();
         dialog.show();
-        if(!point.getDevice_id().equals(deviceId)){
+        //Se comprueba si el usuario que ha hecho click es el mismo que creó el marcador, si lo es puede eliminarlo
+        if (!point.getDevice_id().equals(deviceId)) {
             dialog.getButton(AlertDialog.BUTTON_NEGATIVE)
                     .setEnabled(false);
         }
-
-
     }
 
+    /**
+     * Método que construye el cliente de Google
+     */
     private void buildGoogleApiClient() {
         mGoogleApiClient = new GoogleApiClient.Builder(this)
                 .addConnectionCallbacks(this)
@@ -315,158 +349,169 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     }
 
+    /**
+     * Método en el que se asigna el intent que reaccionará a los eventos del Geofence
+     * @return PendingIntent
+     */
     private PendingIntent getGeofencePendingIntent() {
-        // Reuse the PendingIntent if we already have it.
+        // Si ya existe se reutiliza
         if (mGeofencePendingIntent != null) {
             return mGeofencePendingIntent;
         }
+        //Se hace un intent a la clase en la que se controlarán las transiciones
         Intent intent = new Intent(this, GeofenceTransitionsIntentService.class);
-        // We use FLAG_UPDATE_CURRENT so that we get the same pending intent back when calling
-        // addGeofences() and removeGeofences().
         return PendingIntent.getService(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT);
     }
 
+    /**
+     * Método en el que se configuran los eventos a los que reacciona el geofence y en el que se añaden
+     * @return GeofencingRequest
+     */
     private GeofencingRequest getGeofencingRequest() {
         GeofencingRequest.Builder builder = new GeofencingRequest.Builder();
 
-        // The INITIAL_TRIGGER_ENTER flag indicates that geofencing service should trigger a
-        // GEOFENCE_TRANSITION_ENTER notification when the geofence is added and if the device
-        // is already inside that geofence.
+        //El servicio reaccionará en este caso a los eventos de entrada y de mantenerse en un geofence
         builder.setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER | GeofencingRequest.INITIAL_TRIGGER_DWELL);
 
-        // Add the geofences to be monitored by geofencing service.
+        // Se añade la lista de geofences
         builder.addGeofences(mGeofenceList);
-
-        // Return a GeofencingRequest.
         return builder.build();
     }
 
+    /**
+     * Método que realiza las peticiones Get al servidor y actualiza todos los datos de la aplicación
+     */
     private void checkForUpdates() {
         dialogLoading = ProgressDialog.show(MapsActivity.this, "", "Cargando...");
+        //Se limpia el mapa de marcadores y geofences
         mMap.clear();
         LocationServices.GeofencingApi.removeGeofences(
                 mGoogleApiClient,
-                // This is the same pending intent that was used in addGeofences().
                 getGeofencePendingIntent()
-        ).setResultCallback(this); // Result processed in onResult().
+        ).setResultCallback(this);
 
+        //Se realiza una petición para obtener todos los puntos almacenados en el servidor
         ServiceRetrofit contactService = ServiceRetrofit.retrofit.create(ServiceRetrofit.class);
         Call<ArrayList<PointGeo>> call = contactService.getPoints();
         call.enqueue(new Callback<ArrayList<PointGeo>>() {
-
             @Override
             public void onResponse(Call<ArrayList<PointGeo>> call, Response<ArrayList<PointGeo>> response) {
                 if (response.body() != null) {
+                    //En caso de respuesta positiva recorremos todos los puntos recibidos
                     for (PointGeo point : response.body()) {
+                        //Se añade el marcador al mapa, en el snippet se guarda la id para poder obtener el detalle cuando se pulse el marcador
                         mMap.addMarker(new MarkerOptions().position(new LatLng(point.getLat(), point.getLon())).title(point.getMessage()).snippet(String.valueOf(point.getId())));
+                        //Se construye el geofence
                         Geofence geofence = new Geofence.Builder()
-                                // Set the request ID of the geofence. This is a string to identify this
-                                // geofence.
+                                //Se asigna el id
                                 .setRequestId(String.valueOf(point.getId()))
-
-                                // Set the circular region of this geofence.
+                                // Se asignan sus puntos y su radio
                                 .setCircularRegion(
                                         point.getLat(),
                                         point.getLon(),
                                         point.getRadius()
                                 )
-
-                                // Set the expiration duration of the geofence. This geofence gets automatically
-                                // removed after this period of time.
+                                //Se asigna la duración, en este caso nunca expirará
                                 .setExpirationDuration(NEVER_EXPIRE)
-
-                                // Set the transition types of interest. Alerts are only generated for these
-                                // transition. We track entry and exit transitions in this sample.
+                                //Se asocian las transiciones que serán lanzadas
                                 .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER | Geofence.GEOFENCE_TRANSITION_DWELL)
                                 .setLoiteringDelay(TIME_WAIT_GEOFENCE)
-                                // Create the geofence.
                                 .build();
-                        mGeofenceList.add(geofence);
-//                        CircleOptions circleOptions = new CircleOptions()
-//                                .strokeColor(Color.BLACK) //Outer black border
-//                                .fillColor(Color.TRANSPARENT) //inside of the geofence will be transparent, change to whatever color you prefer like 0x88ff0000 for mid-transparent red
-//                                .center(new LatLng(point.getLat(), point.getLon())) // the LatLng Object of your geofence location
-//                                .radius(point.getRadius()); // The radius (in meters) of your geofence
-//
-//// Get back the mutable Circle
-//                        Circle circle = mMap.addCircle(circleOptions);
+                        // Se guarda en un TreeMap ordenado la distancia entre la localización y el punto como clave y el geofence como valor
+                        if(mLastLocation!=null){
+                            distanceGeofences.put(haversine(mLastLocation.getLatitude(), mLastLocation.getLongitude(), point.getLat(), point.getLon()) * 1000, geofence);
+                        }
+
                     }
-
-
                 }
-
-                if (mGeofenceList.size() > 0) {
-                    Log.d(TAG, "Añadidos los geofences");
+                if (distanceGeofences.size() > 0) {
+                    //Se guarda en el ArrayList los valores del TreeMap ya ordenados
+                    mGeofenceList = new ArrayList<>(distanceGeofences.values());
+                    //En el caso que haya mas de 100 se seleccionan solo los 100 primeros, los más cercanos
+                    if (mGeofenceList.size() > 100) {
+                        mGeofenceList = new ArrayList<>(mGeofenceList.subList(0, 100));
+                    }
                     try {
+                        //Se añaden los Geofences
                         LocationServices.GeofencingApi.addGeofences(
                                 mGoogleApiClient,
-                                // The GeofenceRequest object.
                                 getGeofencingRequest(),
-                                // A pending intent that that is reused when calling removeGeofences(). This
-                                // pending intent is used to generate an intent when a matched geofence
-                                // transition is observed.
                                 getGeofencePendingIntent()
-                        ).setResultCallback(MapsActivity.this); // Result processed in onResult().
+                        ).setResultCallback(MapsActivity.this);
                     } catch (SecurityException securityException) {
-                        // Catch exception generated if the app does not use ACCESS_FINE_LOCATION permission.
 
                     }
                 }
                 dialogLoading.dismiss();
             }
-
-
             @Override
             public void onFailure(Call<ArrayList<PointGeo>> call, Throwable t) {
                 dialogLoading.dismiss();
             }
         });
+    }
 
+    /**
+     * Método que devuelve la distancia en Km entre dos puntos
+     * @param lat1 Latitud del punto A
+     * @param lon1 Longitud del punto A
+     * @param lat2 Latitud del punto B
+     * @param lon2 Longitud del punto B
+     * @return Distancia en km
+     */
+    public static Double haversine(Double lat1, Double lon1, Double lat2, Double lon2) {
+        Double dLat = Math.toRadians(lat2 - lat1);
+        Double dLon = Math.toRadians(lon2 - lon1);
+        lat1 = Math.toRadians(lat1);
+        lat2 = Math.toRadians(lat2);
 
+        Double a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.sin(dLon / 2) * Math.sin(dLon / 2) * Math.cos(lat1) * Math.cos(lat2);
+        Double c = 2 * Math.asin(Math.sqrt(a));
+        return R_H * c;
     }
 
 
     /**
-     * Runs when a GoogleApiClient object successfully connects.
+     * Se ejecuta si el cliente de google se ha conectado
      */
     @Override
     public void onConnected(@Nullable Bundle bundle) {
-        Log.i(TAG, "Connected to GoogleApiClient");
         checkForUpdates();
-
+        //Se configura la petición de localización al usuario
+        mLocationRequest = new LocationRequest();
+        mLocationRequest.setInterval(1000);
+        mLocationRequest.setFastestInterval(1000);
+        mLocationRequest.setPriority(LocationRequest.PRIORITY_BALANCED_POWER_ACCURACY);
+        LocationServices.FusedLocationApi.requestLocationUpdates(mGoogleApiClient, mLocationRequest, MapsActivity.this);
     }
 
     @Override
     public void onConnectionSuspended(int i) {
-        // The connection to Google Play services was lost for some reason.
+        // Se ha perdido la conexión con el cliente
         Log.i(TAG, "Connection suspended");
-        // onConnected() will be called again automatically when the service reconnects
     }
 
     @Override
     public void onConnectionFailed(@NonNull ConnectionResult connectionResult) {
-        // Refer to the javadoc for ConnectionResult to see what error codes might be returned in
-        // onConnectionFailed.
+        //La conexión ha fallado
         Log.i(TAG, "Connection failed: ConnectionResult.getErrorCode() = " + connectionResult.getErrorCode());
     }
 
     @Override
     public void onResult(@NonNull Status status) {
         if (status.isSuccess()) {
-            // Update state and save in shared preferences.
-            mGeofencesAdded = !mGeofencesAdded;
-
-
-            // Update the UI. Adding geofences enables the Remove Geofences button, and removing
-            // geofences enables the Add Geofences button.
-            //setButtonsEnabledState();
 
 
         } else {
-            // Get the status code for the error and log it using a user-friendly message.
             String errorMessage = GeofenceErrorMessages.getErrorString(this,
                     status.getStatusCode());
             Log.e(TAG, errorMessage);
         }
+    }
+
+    @Override
+    public void onLocationChanged(Location location) {
+        //Se actualiza la ultima ubicación del usuario
+        mLastLocation = location;
     }
 }
