@@ -35,7 +35,7 @@ interface ServiceRetrofit {
     Call<Response<Void>> deletePoint(@Path("id") long contactId);
 
     public static final Retrofit retrofit = new Retrofit.Builder()
-            .baseUrl("http://165.227.79.216:8000/api/1.0/")
+            .baseUrl("http://165.227.79.216:80/api/1.0/")
             .addConverterFactory(GsonConverterFactory.create())
             .build();
 }
