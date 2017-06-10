@@ -189,30 +189,37 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                         public void onClick(DialogInterface dialog, int which) {
                             Log.d(TAG, "Crear punto");
                             //Se muestra una barra de carga
-                            dialogLoading = ProgressDialog.show(MapsActivity.this, "", "Cargando...");
+
                             EditText message = (EditText) v.findViewById(R.id.editTextMensaje);
-                            //Se crea el objeto punto que será enviado al servidor
-                            PointGeo point = new PointGeo(latLng.latitude, latLng.longitude, RADIUS_GEOFENCE, message.getText().toString(), deviceId);
-                            //Se hace uso del servicio Retrofit para conectarnos
-                            ServiceRetrofit contactService = ServiceRetrofit.retrofit.create(ServiceRetrofit.class);
-                            //Se realiza una petición POST pasando el objeto
-                            Call<PointGeo> call = contactService.postPoint(point);
-                            call.enqueue(new Callback<PointGeo>() {
-                                @Override
-                                public void onResponse(Call<PointGeo> call, Response<PointGeo> response) {
-                                    //En caso de respuesta afirmativa del servidor se actualizan los datos
-                                    dialogLoading.dismiss();
-                                    checkForUpdates();
-                                    Log.d("OK:", "Punto creado correctamente");
-                                    Toast.makeText(getApplicationContext(),"Geodato creado correctamente", Toast.LENGTH_LONG).show();
-                                }
-                                @Override
-                                public void onFailure(Call<PointGeo> call, Throwable t) {
-                                    dialogLoading.dismiss();
-                                    Toast.makeText(getApplicationContext(),"Error en la creación", Toast.LENGTH_LONG).show();
-                                    Log.d("Error:", "Error en la creación");
-                                }
-                            });
+                            if (message.getText().toString().trim().length() < 1) {
+                                Toast.makeText(getApplicationContext(),"ERROR: El mensaje no puede estar vacío", Toast.LENGTH_LONG).show();
+                                Log.d("Error:", "Mensaje vacío");
+                            } else {
+                                dialogLoading = ProgressDialog.show(MapsActivity.this, "", "Cargando...");
+                                //Se crea el objeto punto que será enviado al servidor
+                                PointGeo point = new PointGeo(latLng.latitude, latLng.longitude, RADIUS_GEOFENCE, message.getText().toString(), deviceId);
+                                //Se hace uso del servicio Retrofit para conectarnos
+                                ServiceRetrofit contactService = ServiceRetrofit.retrofit.create(ServiceRetrofit.class);
+                                //Se realiza una petición POST pasando el objeto
+                                Call<PointGeo> call = contactService.postPoint(point);
+                                call.enqueue(new Callback<PointGeo>() {
+                                    @Override
+                                    public void onResponse(Call<PointGeo> call, Response<PointGeo> response) {
+                                        //En caso de respuesta afirmativa del servidor se actualizan los datos
+                                        dialogLoading.dismiss();
+                                        checkForUpdates();
+                                        Log.d("OK:", "Punto creado correctamente");
+                                        Toast.makeText(getApplicationContext(), "Geodato creado correctamente", Toast.LENGTH_LONG).show();
+                                    }
+
+                                    @Override
+                                    public void onFailure(Call<PointGeo> call, Throwable t) {
+                                        dialogLoading.dismiss();
+                                        Toast.makeText(getApplicationContext(), "Error en la creación", Toast.LENGTH_LONG).show();
+                                        Log.d("Error:", "Error en la creación");
+                                    }
+                                });
+                            }
                         }
                     })
                     //En caso de cancelar la creación se cierra el dialog
@@ -315,12 +322,12 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         builder.setView(v)
                 //En caso de respuesta afirmativa  se cierra el cuadro
                 .setPositiveButton("Ok", new DialogInterface.OnClickListener() {
-            @Override
-            public void onClick(DialogInterface dialog, int which) {
-                Log.d("OK:", "Detalle Geodato cerrado");
-            }
-            //En caso de respuesta negativa se realiza una petición para eliminar el punto
-        }).setNegativeButton("Eliminar", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        Log.d("OK:", "Detalle Geodato cerrado");
+                    }
+                    //En caso de respuesta negativa se realiza una petición para eliminar el punto
+                }).setNegativeButton("Eliminar", new DialogInterface.OnClickListener() {
             @Override
             public void onClick(DialogInterface dialog, int which) {
                 //Se realiza una petición delete sobre la id enviada
@@ -335,6 +342,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                         Log.d("OK:", "Punto eliminado correctamente");
                         Toast.makeText(getApplicationContext(), "Geodato eliminado correctamente", Toast.LENGTH_LONG).show();
                     }
+
                     @Override
                     public void onFailure(Call<Response<Void>> call, Throwable t) {
                         dialogLoading.dismiss();
@@ -366,6 +374,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     /**
      * Método en el que se asigna el intent que reaccionará a los eventos del Geofence
+     *
      * @return PendingIntent
      */
     private PendingIntent getGeofencePendingIntent() {
@@ -380,6 +389,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     /**
      * Método en el que se configuran los eventos a los que reacciona el geofence y en el que se añaden
+     *
      * @return GeofencingRequest
      */
     private GeofencingRequest getGeofencingRequest() {
@@ -433,7 +443,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                                 .setLoiteringDelay(TIME_WAIT_GEOFENCE)
                                 .build();
                         // Se guarda en un TreeMap ordenado la distancia entre la localización y el punto como clave y el geofence como valor
-                        if(mLastLocation!=null){
+                        if (mLastLocation != null) {
                             distanceGeofences.put(haversine(mLastLocation.getLatitude(), mLastLocation.getLongitude(), point.getLat(), point.getLon()) * 1000, geofence);
                         }
 
@@ -459,8 +469,8 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                 }
                 dialogLoading.dismiss();
                 Log.d(TAG, "Datos actualizados");
-                Toast.makeText(getApplicationContext(), "Datos actualizados correctamente", Toast.LENGTH_SHORT).show();
             }
+
             @Override
             public void onFailure(Call<ArrayList<PointGeo>> call, Throwable t) {
                 dialogLoading.dismiss();
@@ -471,6 +481,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     /**
      * Método que devuelve la distancia en Km entre dos puntos
+     *
      * @param lat1 Latitud del punto A
      * @param lon1 Longitud del punto A
      * @param lat2 Latitud del punto B
