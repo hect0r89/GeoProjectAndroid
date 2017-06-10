@@ -10,29 +10,43 @@ import retrofit2.http.Body;
 import retrofit2.http.DELETE;
 import retrofit2.http.GET;
 import retrofit2.http.POST;
-import retrofit2.http.PUT;
 import retrofit2.http.Path;
 
 /**
- * Created by Hector on 04/06/2017.
+ * Interfaz que permite la conexión con el backend
  */
-
 interface ServiceRetrofit {
 
+    /**
+     * Método que realiza la petición GET para obtener los puntos
+     * @return ArrayList de PointGeo
+     */
     @GET("points/")
     Call<ArrayList<PointGeo>> getPoints();
 
+    /**
+     * Método que realiza la petición POST para crear un punto
+     * @param point GeoPoint
+     * @return PointGeo
+     */
     @POST("points/")
     Call<PointGeo> postPoint(@Body PointGeo point);
 
+    /**
+     * Método que realiza la petición GET para obtener un punto en concreto
+     * @param pointId id del punto
+     * @return PointGeo
+     */
     @GET("points/{id}/")
     Call<PointGeo> getPoint(@Path("id") int pointId);
 
-    @PUT("points/{id}/")
-    Call<PointGeo> putPoint(@Path("id") long contactId, @Body PointGeo c);
-
+    /**
+     * Método que realiza la petición DELETE  para borrar un punto
+     * @param pointId id del punto
+     * @return Response
+     */
     @DELETE("points/{id}/")
-    Call<Response<Void>> deletePoint(@Path("id") long contactId);
+    Call<Response<Void>> deletePoint(@Path("id") int pointId);
 
     public static final Retrofit retrofit = new Retrofit.Builder()
             .baseUrl("http://165.227.79.216:80/api/1.0/")

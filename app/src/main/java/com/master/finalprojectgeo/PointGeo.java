@@ -1,16 +1,14 @@
 package com.master.finalprojectgeo;
 
 /**
- * Created by Hector on 04/06/2017.
+ * Clase en la que se almacenarán los datos del punto
  */
-
 class PointGeo {
     private double lat;
     private double lon;
     private int radius;
     private String message;
     private int id;
-    private Float rating;
     private String device_id;
 
     public PointGeo(double lat, double lon, int radius, String message,  String device_id) {
@@ -59,14 +57,6 @@ class PointGeo {
 
     public void setId(int id) {
         this.id = id;
-    }
-
-    public Float getRating() {
-        return rating;
-    }
-
-    public void setRating(Float rating) {
-        this.rating = rating;
     }
 
     public String getDevice_id() {

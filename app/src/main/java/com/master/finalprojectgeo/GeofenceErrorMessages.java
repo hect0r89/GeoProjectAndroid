@@ -1,8 +1,6 @@
 package com.master.finalprojectgeo;
 
-/**
- * Created by Hector on 05/06/2017.
- */
+
 
 import android.content.Context;
 import android.content.res.Resources;
@@ -10,16 +8,17 @@ import android.content.res.Resources;
 import com.google.android.gms.location.GeofenceStatusCodes;
 
 /**
- * Geofence error codes mapped to error messages.
+ * Clase que se encarga de transoformar el código de error de los Geofences en String
  */
 public class GeofenceErrorMessages {
-    /**
-     * Prevents instantiation.
-     */
+
     private GeofenceErrorMessages() {}
 
     /**
-     * Returns the error string for a geofencing error code.
+     * Método que transforma el código de error en texto
+     * @param context contexto de la aplicación
+     * @param errorCode código de error
+     * @return String con el texto del error
      */
     public static String getErrorString(Context context, int errorCode) {
         Resources mResources = context.getResources();

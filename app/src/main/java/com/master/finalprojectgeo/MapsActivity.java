@@ -20,6 +20,7 @@ import android.view.MenuItem;
 import android.view.View;
 import android.widget.EditText;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
@@ -127,6 +128,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         //Se obtiene el id único del usuario de este dispositivo
         deviceId = Settings.Secure.getString(getApplicationContext().getContentResolver(),
                 Settings.Secure.ANDROID_ID);
+        Log.d("ID dispositivo:", deviceId);
         //Se asigna la toolbar
         Toolbar myToolbar = (Toolbar) findViewById(R.id.my_toolbar);
         setSupportActionBar(myToolbar);
@@ -151,6 +153,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         // Se infla el menú que aparecerá en la toolbar
+        Log.d(TAG, "Opciones del menú creadas");
         getMenuInflater().inflate(R.menu.menu_app_bar, menu);
         return true;
     }
@@ -184,6 +187,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
 
                         @Override
                         public void onClick(DialogInterface dialog, int which) {
+                            Log.d(TAG, "Crear punto");
                             //Se muestra una barra de carga
                             dialogLoading = ProgressDialog.show(MapsActivity.this, "", "Cargando...");
                             EditText message = (EditText) v.findViewById(R.id.editTextMensaje);
@@ -199,11 +203,14 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                                     //En caso de respuesta afirmativa del servidor se actualizan los datos
                                     dialogLoading.dismiss();
                                     checkForUpdates();
+                                    Log.d("OK:", "Punto creado correctamente");
+                                    Toast.makeText(getApplicationContext(),"Geodato creado correctamente", Toast.LENGTH_LONG).show();
                                 }
-
                                 @Override
                                 public void onFailure(Call<PointGeo> call, Throwable t) {
                                     dialogLoading.dismiss();
+                                    Toast.makeText(getApplicationContext(),"Error en la creación", Toast.LENGTH_LONG).show();
+                                    Log.d("Error:", "Error en la creación");
                                 }
                             });
                         }
@@ -212,13 +219,10 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                     .setNegativeButton("Cancelar", new DialogInterface.OnClickListener() {
                         @Override
                         public void onClick(DialogInterface dialog, int which) {
-
+                            Log.d(TAG, "Creación cancelada");
                         }
                     });
-
             builder.show();
-
-
         }
     };
 
@@ -228,6 +232,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     @Override
     public void onMapReady(GoogleMap googleMap) {
         mMap = googleMap;
+        Log.d(TAG, "Mapa listo");
         fromOnMapReady = true;
         //Solicitamos permisos de ubicación los únicos necesarios
         Dexter.withActivity(this)
@@ -236,10 +241,13 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                     @Override
                     public void onPermissionGranted(PermissionGrantedResponse response) {
                         mMap.setMyLocationEnabled(true);
+                        Log.d(TAG, "Permisos ubicación aceptados");
                     }
 
                     @Override
-                    public void onPermissionDenied(PermissionDeniedResponse response) {/* ... */}
+                    public void onPermissionDenied(PermissionDeniedResponse response) {
+                        Log.d(TAG, "Permisos rechazados");
+                    }
 
                     @Override
                     public void onPermissionRationaleShouldBeShown(PermissionRequest permission, PermissionToken token) {
@@ -260,6 +268,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
         mMap.setOnMarkerClickListener(new GoogleMap.OnMarkerClickListener() {
             @Override
             public boolean onMarkerClick(Marker marker) {
+                Log.d(TAG, "Punto pulsado");
                 marker.hideInfoWindow();
                 String snippet = marker.getSnippet();
                 dialogLoading = ProgressDialog.show(MapsActivity.this, "", "Cargando...");
@@ -272,11 +281,14 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                         dialogLoading.dismiss();
                         //En caso de respuesta afirmativa se muestra el detalle
                         showDetail(response.body());
+                        Log.d("Ok:", "Detalle recibido correctamente");
                     }
 
                     @Override
                     public void onFailure(Call<PointGeo> call, Throwable t) {
                         dialogLoading.dismiss();
+                        Log.d("Error:", "Error al cargar el detalle");
+                        Toast.makeText(getApplicationContext(), "Error: Ha ocurrido un error", Toast.LENGTH_LONG).show();
                     }
                 });
                 return true;
@@ -305,6 +317,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                 .setPositiveButton("Ok", new DialogInterface.OnClickListener() {
             @Override
             public void onClick(DialogInterface dialog, int which) {
+                Log.d("OK:", "Detalle Geodato cerrado");
             }
             //En caso de respuesta negativa se realiza una petición para eliminar el punto
         }).setNegativeButton("Eliminar", new DialogInterface.OnClickListener() {
@@ -319,10 +332,14 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                         dialogLoading.dismiss();
                         //En caso de respuesta afirmativa se actualizan los datos
                         checkForUpdates();
+                        Log.d("OK:", "Punto eliminado correctamente");
+                        Toast.makeText(getApplicationContext(), "Geodato eliminado correctamente", Toast.LENGTH_LONG).show();
                     }
                     @Override
                     public void onFailure(Call<Response<Void>> call, Throwable t) {
                         dialogLoading.dismiss();
+                        Log.d("Error:", "Error al eliminar el punto");
+                        Toast.makeText(getApplicationContext(), "Error: Ha ocurrido un error", Toast.LENGTH_LONG).show();
                     }
                 });
             }
@@ -345,8 +362,6 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                 .addOnConnectionFailedListener(this)
                 .addApi(LocationServices.API)
                 .build();
-
-
     }
 
     /**
@@ -389,7 +404,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                 mGoogleApiClient,
                 getGeofencePendingIntent()
         ).setResultCallback(this);
-
+        Log.d(TAG, "Actualizando...");
         //Se realiza una petición para obtener todos los puntos almacenados en el servidor
         ServiceRetrofit contactService = ServiceRetrofit.retrofit.create(ServiceRetrofit.class);
         Call<ArrayList<PointGeo>> call = contactService.getPoints();
@@ -443,10 +458,13 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
                     }
                 }
                 dialogLoading.dismiss();
+                Log.d(TAG, "Datos actualizados");
+                Toast.makeText(getApplicationContext(), "Datos actualizados correctamente", Toast.LENGTH_SHORT).show();
             }
             @Override
             public void onFailure(Call<ArrayList<PointGeo>> call, Throwable t) {
                 dialogLoading.dismiss();
+                Toast.makeText(getApplicationContext(), "Error: Ha ocurrido un error", Toast.LENGTH_LONG).show();
             }
         });
     }
@@ -476,6 +494,7 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
      */
     @Override
     public void onConnected(@Nullable Bundle bundle) {
+        Log.d(TAG, "GoogleApiClient conectado correctamente");
         checkForUpdates();
         //Se configura la petición de localización al usuario
         Dexter.withActivity(this)
@@ -504,19 +523,19 @@ public class MapsActivity extends AppCompatActivity implements OnMapReadyCallbac
     @Override
     public void onConnectionSuspended(int i) {
         // Se ha perdido la conexión con el cliente
-        Log.i(TAG, "Connection suspended");
+        Log.d(TAG, "Conexión suspendida");
     }
 
     @Override
     public void onConnectionFailed(@NonNull ConnectionResult connectionResult) {
         //La conexión ha fallado
-        Log.i(TAG, "Connection failed: ConnectionResult.getErrorCode() = " + connectionResult.getErrorCode());
+        Log.d(TAG, "Falo en la conexión " + connectionResult.getErrorMessage());
     }
 
     @Override
     public void onResult(@NonNull Status status) {
         if (status.isSuccess()) {
-
+            Log.d(TAG, "Geofence transicion realizada correctamente");
 
         } else {
             String errorMessage = GeofenceErrorMessages.getErrorString(this,
